@@ -8,305 +8,394 @@ import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { domains, availableYears } from "@/lib/data"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 
 export default function ProfilePage() {
-  const [isEditing, setIsEditing] = useState(false)
-  const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+    const [isEditing, setIsEditing] = useState(false)
+    const [user, setUser] = useState<any>(null)
+    const [loading, setLoading] = useState(true)
 
-  const [formData, setFormData] = useState({
-    full_name: "",
-    domain: "",
-    year_of_study: "",
-    interests: "",
-    skills: "",
-    portfolio_links: ""
-  })
+    const [formData, setFormData] = useState({
+        name: '',
+        university: '',
+        department: '',
+        year: '',
+        location: '',
+        bio: '',
+        degree: '',
+        specialization: '',
+        cgpa: '',
+        graduation_year: '',
+        portfolio: '',
+        resume: ''
+    })
 
-  useEffect(() => {
-    fetchUser()
-  }, [])
+    const [skills, setSkills] = useState([])
+    const [skillInput, setSkillInput] = useState('')
 
-  const fetchUser = async () => {
-    try {
-      const { data } = await api.get("/users/profile")
-      setUser(data)
-    } catch (error) {
-      console.error("Failed to fetch user in ProfilePage", error)
-      toast.error("Failed to load profile.")
-    } finally {
-      setLoading(false)
+    const [projects, setProjects] = useState([])
+    const [certificates, setCertificates] = useState([])
+    const [achievements, setAchievements] = useState([])
+
+    const steps = [
+        { title: 'Personal', icon: <User size={18} /> },
+        { title: 'Academic', icon: <School size={18} /> },
+        { title: 'Skills', icon: <Cpu size={18} /> },
+        { title: 'Work & Projects', icon: <Briefcase size={18} /> },
+        { title: 'Achievements', icon: <Award size={18} /> }
+    ]
+
+    const handleNext = () => setActiveStep(prev => Math.min(prev + 1, steps.length - 1))
+    const handleBack = () => setActiveStep(prev => Math.max(prev - 1, 0))
+
+    const handleAddSkill = () => {
+        if (skillInput.trim() && !skills.includes(skillInput.trim())) {
+            setSkills([...skills, skillInput.trim()])
+            setSkillInput('')
+        }
     }
-  }
 
-  const handleEditToggle = () => {
-    if (!isEditing && user) {
-      setFormData({
-        full_name: user.profile?.full_name || "",
-        domain: user.profile?.domain || "",
-        year_of_study: user.profile?.year_of_study || "",
-        interests: user.profile?.interests || "",
-        skills: user.profile?.skills?.join(", ") || "",
-        portfolio_links: user.profile?.portfolio_links?.join(", ") || ""
-      })
+    const addItem = (type) => {
+        if (type === 'project') setProjects([...projects, { title: '', description: '', tech_stack: [], github_link: '', demo_link: '' }])
+        if (type === 'certificate') setCertificates([...certificates, { title: '', organization: '', issue_date: '', certificate_url: '' }])
+        if (type === 'achievement') setAchievements([...achievements, { title: '', description: '', date: '' }])
     }
-    setIsEditing(!isEditing)
-  }
 
-  const handleSave = async () => {
-    try {
-      const skillsArray = formData.skills.split(',').map(s => s.trim()).filter(Boolean)
-      const portfolioArray = formData.portfolio_links.split(',').map(s => s.trim()).filter(Boolean)
-
-      const payload = {
-        full_name: formData.full_name,
-        domain: formData.domain,
-        year_of_study: formData.year_of_study,
-        interests: formData.interests,
-        skills: skillsArray,
-        portfolio_links: portfolioArray
-      }
-
-      const { data } = await api.put("/users/update-profile", payload)
-      setUser({ ...user, profile: data.profile || payload })
-      setIsEditing(false)
-      toast.success("Profile updated successfully")
-      // Re-fetch to ensure completeness
-      fetchUser()
-    } catch (error) {
-      console.error("Failed to update profile", error)
-      toast.error("Failed to update profile")
+    const updateItem = (type, index, field, value) => {
+        if (type === 'project') {
+            const newProjects = [...projects]
+            newProjects[index][field] = value
+            setProjects(newProjects)
+        }
+        if (type === 'certificate') {
+            const newCerts = [...certificates]
+            newCerts[index][field] = value
+            setCertificates(newCerts)
+        }
+        if (type === 'achievement') {
+            const newAch = [...achievements]
+            newAch[index][field] = value
+            setAchievements(newAch)
+        }
     }
-  }
 
-  // Calculate initials like "Alex Rivera" -> "AR"
-  const getInitials = (name: string) => {
-    if (!name) return "U"
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .substring(0, 2)
-      .toUpperCase()
-  }
+    const handleSubmit = async (e) => {
+        e.preventDefault()
+        setIsSubmitting(true)
+        try {
+            const payload = {
+                ...formData,
+                skills,
+                projects,
+                certificates,
+                achievements,
+                student_id: 'auto-detect-on-backend' // The backend uses the token to find the student
+            }
+            const res = await fetch('/api/passport/update', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(payload)
+            })
+            const data = await res.json()
+            if (data.success) {
+                alert('Passport updated and finalized!')
+            }
+        } catch (err) {
+            console.error('Submission failed', err)
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
 
-  if (loading) {
-    return <div className="p-8 text-center text-muted-foreground">Loading profile...</div>
-  }
+    const renderStepContent = () => {
+        switch (activeStep) {
+            case 0: // Personal
+                return (
+                    <div className="flex flex-col gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <InputField label="Full Name" icon={<User size={14} />} value={formData.name} onChange={v => setFormData({ ...formData, name: v })} placeholder="John Doe" />
+                            <InputField label="Location" icon={<MapPin size={14} />} value={formData.location} onChange={v => setFormData({ ...formData, location: v })} placeholder="Palo Alto, CA" />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-bold text-slate-300 flex items-center gap-2">
+                                <BookOpen size={14} className="text-brand-primary" /> Professional Bio
+                            </label>
+                            <textarea
+                                rows="4"
+                                value={formData.bio}
+                                onChange={e => setFormData({ ...formData, bio: e.target.value })}
+                                placeholder="Write a short summary of your background and goals..."
+                                className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/50 focus:border-brand-primary transition-all text-white resize-none"
+                            />
+                        </div>
+                    </div>
+                )
+            case 1: // Academic
+                return (
+                    <div className="flex flex-col gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <InputField label="University" icon={<School size={14} />} value={formData.university} onChange={v => setFormData({ ...formData, university: v })} placeholder="Stanford University" />
+                            <InputField label="Department" icon={<Building2 size={14} />} value={formData.department} onChange={v => setFormData({ ...formData, department: v })} placeholder="Computer Science" />
+                            <InputField label="Degree" icon={<GraduationCap size={14} />} value={formData.degree} onChange={v => setFormData({ ...formData, degree: v })} placeholder="Bachelor of Technology" />
+                            <InputField label="Specialization" icon={<Cpu size={14} />} value={formData.specialization} onChange={v => setFormData({ ...formData, specialization: v })} placeholder="Artificial Intelligence" />
+                            <InputField label="CGPA" icon={<Award size={14} />} value={formData.cgpa} onChange={v => setFormData({ ...formData, cgpa: v })} placeholder="3.9" />
+                            <InputField label="Graduation Year" icon={<Calendar size={14} />} value={formData.graduation_year} onChange={v => setFormData({ ...formData, graduation_year: v })} placeholder="2025" />
+                        </div>
+                    </div>
+                )
+            case 2: // Skills
+                return (
+                    <div className="flex flex-col gap-6">
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-bold text-slate-300">Add Technical Skills</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={skillInput}
+                                    onChange={e => setSkillInput(e.target.value)}
+                                    onKeyPress={e => e.key === 'Enter' && handleAddSkill()}
+                                    placeholder="Enter skill (e.g. React, Docker)"
+                                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/50 focus:border-brand-primary transition-all text-white"
+                                />
+                                <button type="button" onClick={handleAddSkill} className="w-12 h-12 rounded-xl bg-brand-primary flex items-center justify-center text-white"><Plus size={20} /></button>
+                            </div>
+                            <div className="flex flex-wrap gap-2 mt-4">
+                                {skills.map(s => (
+                                    <span key={s} className="px-3 py-1.5 rounded-lg bg-brand-primary/10 border border-brand-primary/20 text-brand-primary text-xs font-bold flex items-center gap-2">
+                                        {s} <X size={12} className="cursor-pointer" onClick={() => setSkills(skills.filter(x => x !== s))} />
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )
+            case 3: // Projects & Certs
+                return (
+                    <div className="flex flex-col gap-10">
+                        <div>
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2"><Briefcase size={18} className="text-brand-primary" /> Key Projects</h3>
+                                <button type="button" onClick={() => addItem('project')} className="text-xs font-bold text-brand-primary flex items-center gap-1 hover:underline"><Plus size={14} /> Add Project</button>
+                            </div>
+                            <div className="space-y-6">
+                                {projects.map((p, i) => (
+                                    <div key={i} className="glass-card p-6 bg-white/2 border-white/5 relative">
+                                        <button type="button" onClick={() => setProjects(projects.filter((_, idx) => idx !== i))} className="absolute top-4 right-4 text-slate-500 hover:text-red-400 Transition-all"><X size={16} /></button>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <input placeholder="Project Title" className="bg-transparent border-b border-white/10 py-2 text-white font-bold outline-none focus:border-brand-primary" value={p.title} onChange={e => updateItem('project', i, 'title', e.target.value)} />
+                                            <input placeholder="GitHub URL" className="bg-transparent border-b border-white/10 py-2 text-slate-400 text-sm outline-none focus:border-brand-primary" value={p.github_link} onChange={e => updateItem('project', i, 'github_link', e.target.value)} />
+                                            <textarea placeholder="Brief Description" className="col-span-1 md:col-span-2 bg-transparent border-b border-white/10 py-2 text-sm text-slate-400 outline-none focus:border-brand-primary resize-none" value={p.description} onChange={e => updateItem('project', i, 'description', e.target.value)} />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
 
-  const name = user?.profile?.full_name || user?.email?.split("@")[0] || "User"
-  const email = user?.email || ""
-  const initials = getInitials(name)
-  const domain = user?.profile?.domain || "Unknown Domain"
-  const year = user?.profile?.year_of_study || "Unknown Year"
-  const bio = user?.profile?.interests || "No bio available."
-  const skills = user?.profile?.skills || []
-  const portfolio = user?.profile?.portfolio_links || []
-  const interests: string[] = [] // Kept array for structure parity if interests are managed elsewhere, otherwise rendering bio.
-
-  return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Digital Passport</h1>
-          <p className="text-sm text-muted-foreground">
-            Your student collaboration profile
-          </p>
-        </div>
-        <button
-          onClick={isEditing ? handleSave : handleEditToggle}
-          className="inline-flex items-center gap-2 rounded-xl bg-card px-4 py-2 text-sm font-medium text-card-foreground transition-colors hover:bg-card/80"
-        >
-          <Edit3 className="size-4" />
-          {isEditing ? "Save Profile" : "Edit Profile"}
-        </button>
-      </div>
-
-      {isEditing ? (
-        <div className="rounded-2xl bg-card p-6 space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="full_name">Full Name</Label>
-            <Input
-              id="full_name"
-              value={formData.full_name}
-              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-              placeholder="E.g. Alex Rivera"
-              className="bg-secondary/50 border-border"
-            />
-          </div>
-            <div className="space-y-2">
-              <Label>Domain / Major</Label>
-              <Select 
-                value={formData.domain} 
-                onValueChange={(value) => setFormData({ ...formData, domain: value })}
-              >
-                <SelectTrigger className="bg-secondary/50 border-border w-full">
-                  <SelectValue placeholder="Select Domain" />
-                </SelectTrigger>
-                <SelectContent>
-                  {domains.map((d) => (
-                    <SelectItem key={d} value={d}>{d}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Year of Study</Label>
-              <Select 
-                value={formData.year_of_study} 
-                onValueChange={(value) => setFormData({ ...formData, year_of_study: value })}
-              >
-                <SelectTrigger className="bg-secondary/50 border-border w-full">
-                  <SelectValue placeholder="Select Year" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableYears.map((y) => (
-                    <SelectItem key={y} value={y}>{y}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          <div className="space-y-2">
-            <Label htmlFor="interests">Bio / Interests</Label>
-            <Textarea
-              id="interests"
-              value={formData.interests}
-              onChange={(e) => setFormData({ ...formData, interests: e.target.value })}
-              placeholder="Tell us about yourself and your interests..."
-              className="min-h-[100px] bg-secondary/50 border-border"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="skills">Skills (comma separated)</Label>
-            <Input
-              id="skills"
-              value={formData.skills}
-              onChange={(e) => setFormData({ ...formData, skills: e.target.value })}
-              placeholder="React, Python, UI Design"
-              className="bg-secondary/50 border-border"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="portfolio_links">Portfolio Links (comma separated)</Label>
-            <Input
-              id="portfolio_links"
-              value={formData.portfolio_links}
-              onChange={(e) => setFormData({ ...formData, portfolio_links: e.target.value })}
-              placeholder="github.com/username, linkedin.com/in/username"
-              className="bg-secondary/50 border-border"
-            />
-          </div>
-        </div>
-      ) : (
+                        {isEditing ? (
+                            <div className="rounded-2xl bg-card p-6 space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="full_name">Full Name</Label>
+                                    <Input
+                                        id="full_name"
+                                        value={formData.full_name}
+                                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                                        placeholder="E.g. Alex Rivera"
+                                        className="bg-secondary/50 border-border"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="domain">Domain / Major</Label>
+                                        <Input
+                                            id="domain"
+                                            value={formData.domain}
+                                            onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
+                                            placeholder="E.g. Computer Science"
+                                            className="bg-secondary/50 border-border"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="year_of_study">Year of Study</Label>
+                                        <Input
+                                            id="year_of_study"
+                                            value={formData.year_of_study}
+                                            onChange={(e) => setFormData({ ...formData, year_of_study: e.target.value })}
+                                            placeholder="E.g. Junior"
+                                            className="bg-secondary/50 border-border"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="interests">Bio / Interests</Label>
+                                    <Textarea
+                                        id="interests"
+                                        value={formData.interests}
+                                        onChange={(e) => setFormData({ ...formData, interests: e.target.value })}
+                                        placeholder="Tell us about yourself and your interests..."
+                                        className="min-h-[100px] bg-secondary/50 border-border"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="skills">Skills (comma separated)</Label>
+                                    <Input
+                                        id="skills"
+                                        value={formData.skills}
+                                        onChange={(e) => setFormData({ ...formData, skills: e.target.value })}
+                                        placeholder="React, Python, UI Design"
+                                        className="bg-secondary/50 border-border"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="portfolio_links">Portfolio Links (comma separated)</Label>
+                                    <Input
+                                        id="portfolio_links"
+                                        value={formData.portfolio_links}
+                                        onChange={(e) => setFormData({ ...formData, portfolio_links: e.target.value })}
+                                        placeholder="github.com/username, linkedin.com/in/username"
+                                        className="bg-secondary/50 border-border"
+                                    />
+                                </div>
+                            </div>
+                        ) : (
         <>
-          {/* Profile Card */}
-          <div className="rounded-2xl bg-card p-6">
-            <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
-              <Avatar className="size-24 bg-accent text-accent-foreground shrink-0">
-                <AvatarFallback className="bg-accent text-accent-foreground text-2xl font-bold">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 text-center sm:text-left">
-                <h2 className="text-xl font-bold text-card-foreground">{name}</h2>
-                <p className="mt-0.5 text-sm text-card-foreground/70">{email}</p>
-                <p className="mt-2 text-sm text-card-foreground/60 leading-relaxed max-w-lg">
-                  {bio}
-                </p>
-                <div className="mt-3 flex flex-wrap items-center justify-center gap-4 sm:justify-start">
-                  <div className="flex items-center gap-1.5 text-sm text-primary">
-                    <Briefcase className="size-4" />
-                    <span>{domain}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-sm text-primary">
-                    <GraduationCap className="size-4" />
-                    <span>{year}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+                                {/* Profile Card */}
+                                <div className="rounded-2xl bg-card p-6">
+                                    <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
+                                        <Avatar className="size-24 bg-accent text-accent-foreground shrink-0">
+                                            <AvatarFallback className="bg-accent text-accent-foreground text-2xl font-bold">
+                                                {initials}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex-1 text-center sm:text-left">
+                                            <h2 className="text-xl font-bold text-card-foreground">{name}</h2>
+                                            <p className="mt-0.5 text-sm text-card-foreground/70">{email}</p>
+                                            <p className="mt-2 text-sm text-card-foreground/60 leading-relaxed max-w-lg">
+                                                {bio}
+                                            </p>
+                                            <div className="mt-3 flex flex-wrap items-center justify-center gap-4 sm:justify-start">
+                                                <div className="flex items-center gap-1.5 text-sm text-primary">
+                                                    <Briefcase className="size-4" />
+                                                    <span>{domain}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 text-sm text-primary">
+                                                    <GraduationCap className="size-4" />
+                                                    <span>{year}</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                {steps.map((_, i) => (
+                                                    <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i <= activeStep ? 'w-10 bg-brand-primary' : 'w-4 bg-slate-800'}`} />
+                                                ))}
+                                            </div>
+                                        </div>
 
-          {/* Skills */}
-          <div className="rounded-2xl bg-card p-6">
-            <h3 className="flex items-center gap-2 text-lg font-semibold text-card-foreground mb-4">
-              <BookOpen className="size-5 text-primary" />
-              Skills
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {skills.length > 0 ? (
-                skills.map((skill: string) => (
-                  <span
-                    key={skill}
-                    className="rounded-xl bg-primary/20 px-3 py-1.5 text-sm font-medium text-primary"
-                  >
-                    {skill}
-                  </span>
-                ))
-              ) : (
-                <span className="text-sm text-muted-foreground">No skills added yet.</span>
-              )}
-            </div>
-          </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
+                                            {/* Steps Sidebar */}
+                                            <div className="md:col-span-1 flex flex-col gap-4">
+                                                <div className="glass-card p-6 flex flex-col gap-2">
+                                                    {steps.map((step, i) => (
+                                                        <button
+                                                            key={i}
+                                                            onClick={() => setActiveStep(i)}
+                                                            className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all ${activeStep === i
+                                                                    ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/20'
+                                                                    : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                                                                }`}
+                                                        >
+                                                            <div className={`${activeStep === i ? 'text-white' : 'text-slate-500'}`}>{step.icon}</div>
+                                                            {step.title}
+                                                            {activeStep > i && <CheckCircle2 size={16} className="ml-auto text-emerald-400" />}
+                                                        </button>
+                                                    ))}
+                                                </div>
 
-          {/* Interests */}
-          <div className="rounded-2xl bg-card p-6">
-            <h3 className="flex items-center gap-2 text-lg font-semibold text-card-foreground mb-4">
-              <MapPin className="size-5 text-accent" />
-              Interests
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {interests.length > 0 ? (
-                interests.map((interest: string) => (
-                  <span
-                    key={interest}
-                    className="rounded-xl bg-accent/20 px-3 py-1.5 text-sm font-medium text-accent"
-                  >
-                    {interest}
-                  </span>
-                ))
-              ) : (
-                <span className="text-sm text-muted-foreground">No interests added yet.</span>
-              )}
-            </div>
-          </div>
+                                                <div className="glass-card p-6 border-dashed border-2 flex flex-col items-center gap-4 text-center group cursor-pointer hover:border-brand-primary/50 transition-all">
+                                                    <div className="w-16 h-16 rounded-3xl bg-white/5 flex items-center justify-center text-slate-500 group-hover:bg-brand-primary/10 group-hover:text-brand-primary transition-all">
+                                                        <Upload size={24} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-white mb-1">Avatar & Resume</p>
+                                                        <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-relaxed">Update Visuals</p>
+                                                    </div>
+                                                </div>
+                                            </div>
 
-          {/* Portfolio */}
-          <div className="rounded-2xl bg-card p-6">
-            <h3 className="flex items-center gap-2 text-lg font-semibold text-card-foreground mb-4">
-              <ExternalLink className="size-5 text-primary" />
-              Portfolio Links
-            </h3>
-            <div className="space-y-2">
-              {portfolio.length > 0 ? (
-                portfolio.map((link: string, index: number) => (
-                  <a
-                    key={index}
-                    href={link.startsWith("http") ? link : `https://${link}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 rounded-xl border border-border bg-input/50 p-4 transition-colors hover:bg-accent/10 hover:border-accent/50 group"
-                  >
-                    <ExternalLink className="size-4 shrink-0" />
-                    {link}
-                  </a>
-                ))
-              ) : (
-                <span className="text-sm text-muted-foreground">No portfolio links added yet.</span>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  )
+                                            {/* Form Area */}
+                                            <div className="md:col-span-3">
+                                                <form onSubmit={handleSubmit} className="glass-card p-10 flex flex-col min-h-[500px]">
+                                                    <div className="flex-1">
+                                                        <AnimatePresence mode="wait">
+                                                            <motion.div
+                                                                key={activeStep}
+                                                                initial={{ opacity: 0, x: 20 }}
+                                                                animate={{ opacity: 1, x: 0 }}
+                                                                exit={{ opacity: 0, x: -20 }}
+                                                                transition={{ duration: 0.3 }}
+                                                            >
+                                                                <div className="mb-10 flex items-center gap-3">
+                                                                    <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
+                                                                        {steps[activeStep].icon}
+                                                                    </div>
+                                                                    <h3 className="text-2xl font-bold text-white">{steps[activeStep].title} Details</h3>
+                                                                </div>
+                                                                {renderStepContent()}
+                                                            </motion.div>
+                                                        </AnimatePresence>
+                                                    </div>
+
+                                                    <div className="mt-12 pt-8 border-t border-white/5 flex items-center justify-between">
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleBack}
+                                                            disabled={activeStep === 0}
+                                                            className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-white disabled:opacity-0 transition-all"
+                                                        >
+                                                            <ChevronLeft size={20} /> Back
+                                                        </button>
+
+                                                        {activeStep === steps.length - 1 ? (
+                                                            <button
+                                                                type="submit"
+                                                                disabled={isSubmitting}
+                                                                className="px-10 py-4 bg-brand-primary text-white font-black rounded-2xl hover:bg-brand-primary/80 transition-all shadow-xl shadow-brand-primary/30 flex items-center gap-2 active:scale-95"
+                                                            >
+                                                                {isSubmitting ? 'Finalizing...' : 'Finalize & Publish'}
+                                                                <CheckCircle2 size={20} />
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleNext}
+                                                                className="px-10 py-4 bg-white/5 border border-white/10 text-white font-black rounded-2xl hover:bg-white/10 transition-all flex items-center gap-2 active:scale-95"
+                                                            >
+                                                                Continue <ChevronRight size={20} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    )
 }
+
+                                    const InputField = ({label, icon, value, onChange, placeholder, type = "text"}) => (
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-sm font-bold text-slate-400 flex items-center gap-2">
+                                            {icon} {label}
+                                        </label>
+                                        <input
+                                            type={type}
+                                            value={value}
+                                            onChange={e => onChange(e.target.value)}
+                                            placeholder={placeholder}
+                                            className="bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/50 focus:border-brand-primary transition-all text-white font-medium"
+                                        />
+                                    </div>
+                                    )
+
+                                    const MapPinIconPlaceholder = ({size, className}) => <User size={size} className={className} /> // Just in case, but preferably unused now
+
+                                    export default PassportCreate
