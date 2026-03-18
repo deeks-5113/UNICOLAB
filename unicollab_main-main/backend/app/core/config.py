@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     ]
 
     # Database
-    SQLALCHEMY_DATABASE_URI: str = "sqlite:///./unicollab.db"
+    SQLALCHEMY_DATABASE_URI: str = "sqlite:///./unicollab_v2.db"
 
     class Config:
         case_sensitive = True

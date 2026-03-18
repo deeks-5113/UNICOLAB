@@ -11,6 +11,8 @@ export interface Application {
     updated_at: string;
     sender?: {
         full_name: string;
+        domain?: string;
+        year_of_study?: string;
     };
 }
 
@@ -27,7 +29,9 @@ export const useProjectApplications = (projectId: string) => {
                 .select(`
           *,
           sender:profiles (
-            full_name
+            full_name,
+            domain,
+            year_of_study
           )
         `)
                 .eq('project_id', projectId)

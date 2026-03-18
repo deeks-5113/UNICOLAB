@@ -14,6 +14,11 @@ reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login"
 )
 
+reusable_oauth2_optional = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.API_V1_STR}/auth/login",
+    auto_error=False
+)
+
 def get_db() -> Generator:
     try:
         db = database.SessionLocal()
@@ -38,6 +43,21 @@ def get_current_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+def get_current_user_optional(
+    db: Session = Depends(get_db), token: Optional[str] = Depends(reusable_oauth2_optional)
+) -> Optional[models.User]:
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        token_data = schemas.TokenData(email=payload.get("sub"))
+        user = db.query(models.User).filter(models.User.email == token_data.email).first()
+        return user
+    except (JWTError, ValidationError):
+        return None
 
 def get_current_active_user(
     current_user: models.User = Depends(get_current_user),

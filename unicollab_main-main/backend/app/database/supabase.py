@@ -1,7 +1,8 @@
-from supabase import create_client, Client
+# from supabase import create_client, Client
 from app.core.config import settings
+from typing import Any
 
-supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
+supabase: Any = None # create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
 
-def get_supabase_client() -> Client:
+def get_supabase_client() -> Any:
     return supabase

@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api import deps
@@ -30,9 +30,40 @@ def send_request(
     if existing_request:
         raise HTTPException(status_code=400, detail="Request already sent")
         
-    # Check if closed
-    if project.status == models.ProjectStatus.CLOSED:
-        raise HTTPException(status_code=400, detail="Project is closed")
+    # Check if requests are enabled by owner
+    if not project.requests_enabled:
+        raise HTTPException(status_code=403, detail="The project owner has disabled new join requests.")
+
+    # Eligibility validation
+    user_profile = current_user.profile
+    if not user_profile:
+        raise HTTPException(status_code=400, detail="User profile not found. Please complete your profile.")
+
+    # Skill validation (Compulsory)
+    if project.required_skills:
+        user_skills = [s.lower() for s in (user_profile.skills or [])]
+        missing_skills = [s for s in project.required_skills if s.lower() not in user_skills]
+        if missing_skills:
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Missing compulsory skills: {', '.join(missing_skills)}. Please add them to your profile if you have these skills."
+            )
+
+    # Check Year
+    if project.eligible_years:
+        user_year = (user_profile.year_of_study or "").strip().lower()
+        project_years = [y.strip().lower() for y in project.eligible_years]
+        if user_year not in project_years:
+            raise HTTPException(status_code=403, detail=f"Ineligible year. This project is for {', '.join(project.eligible_years)}.")
+    
+    # Check Branch
+    if project.eligible_branches:
+        user_branch = (user_profile.branch or "").strip().lower()
+        project_branches = [b.strip().lower() for b in project.eligible_branches]
+        if user_branch not in project_branches:
+            # If branches are specified, user must match one of them. 
+            # If empty, everyone is eligible for branch (logic preserved above).
+            raise HTTPException(status_code=403, detail=f"Ineligible branch. This project is for {', '.join(project.eligible_branches)}.")
 
     request = models.CollaborationRequest(
         project_id=request_in.project_id,
@@ -50,13 +81,22 @@ def send_request(
 def read_received_requests(
     db: Session = Depends(deps.get_db),
     current_user: models.User = Depends(deps.get_current_user),
+    project_id: Optional[str] = None,
 ) -> Any:
     """
-    Get requests received for my projects.
+    Get requests received for my projects. Optionally filter by project_id.
     """
-    return db.query(models.CollaborationRequest).join(models.Project).filter(
+    query = db.query(models.CollaborationRequest).join(models.Project).filter(
         models.Project.founder_id == current_user.id
-    ).all()
+    )
+    if project_id:
+        import uuid
+        try:
+            p_uuid = uuid.UUID(project_id)
+            query = query.filter(models.CollaborationRequest.project_id == p_uuid)
+        except ValueError:
+            pass
+    return query.all()
 
 @router.get("/sent", response_model=List[schemas.CollaborationRequest])
 def read_sent_requests(

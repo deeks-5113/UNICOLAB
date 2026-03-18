@@ -8,6 +8,14 @@ import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { domains, availableYears } from "@/lib/data"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false)
@@ -135,28 +143,38 @@ export default function ProfilePage() {
               className="bg-secondary/50 border-border"
             />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="domain">Domain / Major</Label>
-              <Input
-                id="domain"
-                value={formData.domain}
-                onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
-                placeholder="E.g. Computer Science"
-                className="bg-secondary/50 border-border"
-              />
+              <Label>Domain / Major</Label>
+              <Select 
+                value={formData.domain} 
+                onValueChange={(value) => setFormData({ ...formData, domain: value })}
+              >
+                <SelectTrigger className="bg-secondary/50 border-border w-full">
+                  <SelectValue placeholder="Select Domain" />
+                </SelectTrigger>
+                <SelectContent>
+                  {domains.map((d) => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="year_of_study">Year of Study</Label>
-              <Input
-                id="year_of_study"
-                value={formData.year_of_study}
-                onChange={(e) => setFormData({ ...formData, year_of_study: e.target.value })}
-                placeholder="E.g. Junior"
-                className="bg-secondary/50 border-border"
-              />
+              <Label>Year of Study</Label>
+              <Select 
+                value={formData.year_of_study} 
+                onValueChange={(value) => setFormData({ ...formData, year_of_study: value })}
+              >
+                <SelectTrigger className="bg-secondary/50 border-border w-full">
+                  <SelectValue placeholder="Select Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableYears.map((y) => (
+                    <SelectItem key={y} value={y}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </div>
           <div className="space-y-2">
             <Label htmlFor="interests">Bio / Interests</Label>
             <Textarea

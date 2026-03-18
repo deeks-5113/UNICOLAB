@@ -19,6 +19,7 @@ class ProfileBase(BaseModel):
     skills: Optional[List[str]] = None
     interests: Optional[str] = None
     year_of_study: Optional[str] = None
+    branch: Optional[str] = None
     portfolio_links: Optional[List[str]] = None
     avatar_url: Optional[str] = None
 
@@ -62,6 +63,10 @@ class LinkUser(BaseModel):
     id: UUID4
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
+    domain: Optional[str] = None
+    year_of_study: Optional[str] = None
+    interests: Optional[str] = None
+    avatar_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -119,9 +124,12 @@ class CollaborationRequest(CollaborationRequestBase):
 class ProjectBase(BaseModel):
     title: str
     description: str
-    domain: str
+    domains: List[str]
     required_skills: List[str]
+    eligible_years: List[str]
+    eligible_branches: List[str]
     team_size_required: int
+    requests_enabled: bool = True
 
 class ProjectCreate(ProjectBase):
     pass
@@ -129,9 +137,12 @@ class ProjectCreate(ProjectBase):
 class ProjectUpdate(ProjectBase):
     title: Optional[str] = None
     description: Optional[str] = None
-    domain: Optional[str] = None
+    domains: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
+    eligible_years: Optional[List[str]] = None
+    eligible_branches: Optional[List[str]] = None
     team_size_required: Optional[int] = None
+    requests_enabled: Optional[bool] = None
     status: Optional[ProjectStatus] = None
 
 class Project(ProjectBase):

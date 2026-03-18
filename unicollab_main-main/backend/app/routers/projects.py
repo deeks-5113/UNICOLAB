@@ -1,10 +1,11 @@
-from typing import Any, List
+from typing import Any, List, Optional
+import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api import deps
 from app.models import models
 from app.schemas import schemas
-from supabase import create_client, Client
+# from supabase import create_client, Client
 from app.core.config import settings
 
 router = APIRouter()
@@ -27,22 +28,12 @@ def create_project(
     db.commit()
     db.refresh(project)
 
-    # Sync to Supabase
-    try:
-        supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
-        supabase.table('projects').insert({
-            'id': str(project.id),
-            'title': project.title,
-            'description': project.description,
-            'domain': project.domain,
-            'required_skills': project.required_skills,
-            'team_size_required': project.team_size_required,
-            'status': project.status,
-            'founder_id': str(project.founder_id),
-            'created_at': project.created_at.isoformat() if project.created_at else None
-        }).execute()
-    except Exception as e:
-        print(f"Failed to sync project to Supabase: {e}")
+    # Sync to Supabase (Disabled)
+    # try:
+    #     supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
+    #     ...
+    # except Exception as e:
+    #     print(f"Failed to sync project to Supabase: {e}")
 
     return project
 
@@ -65,9 +56,9 @@ def read_my_projects(
 
 @router.get("/{project_id}", response_model=schemas.Project)
 def read_project(
-    project_id: str,
+    project_id: uuid.UUID,
     db: Session = Depends(deps.get_db),
-    current_user: models.User = Depends(deps.get_current_user),
+    current_user: Optional[models.User] = Depends(deps.get_current_user_optional),
 ) -> Any:
     """
     Get project by ID.
@@ -81,7 +72,7 @@ def read_project(
 def update_project(
     *,
     db: Session = Depends(deps.get_db),
-    project_id: str,
+    project_id: uuid.UUID,
     project_in: schemas.ProjectUpdate,
     current_user: models.User = Depends(deps.get_current_user),
 ) -> Any:
@@ -107,7 +98,7 @@ def update_project(
 def delete_project(
     *,
     db: Session = Depends(deps.get_db),
-    project_id: str,
+    project_id: uuid.UUID,
     current_user: models.User = Depends(deps.get_current_user),
 ) -> Any:
     """

@@ -8,6 +8,8 @@ interface ApplicationCardProps {
     application: {
         id: string;
         applicant_name?: string;
+        applicant_domain?: string;
+        applicant_year?: string;
         project_title?: string;
         status: 'pending' | 'accepted' | 'rejected';
         message?: string;
@@ -47,8 +49,11 @@ export const ApplicationCard: React.FC<ApplicationCardProps> = ({
                         <CardTitle className="text-lg">
                             {isCreator ? application.applicant_name : application.project_title}
                         </CardTitle>
-                        <CardDescription>
+                        <CardDescription className="flex items-center gap-2">
                             {new Date(application.created_at).toLocaleDateString()}
+                            {isCreator && (application.applicant_domain || application.applicant_year) && (
+                                <span className="text-[10px] text-muted-foreground">• {application.applicant_domain} {application.applicant_year}</span>
+                            )}
                         </CardDescription>
                     </div>
                     {getStatusBadge(application.status)}

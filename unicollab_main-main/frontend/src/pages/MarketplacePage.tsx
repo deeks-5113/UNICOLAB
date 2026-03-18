@@ -44,14 +44,9 @@ export default function MarketplacePage() {
 
   const fetchProjects = async () => {
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*, teams(*)')
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
+      const { data } = await api.get('/marketplace/projects')
       setProjects(data || [])
-    } catch (error) {
+    } catch (error: any) {
       console.error(error)
       toast.error("Failed to fetch projects")
     } finally {

@@ -4,6 +4,7 @@ import { Toaster } from 'sonner'
 import { AppShell } from '@/components/app-shell'
 
 // Pages
+import LandingPage from '@/pages/LandingPage/LandingPage'
 import AuthPage from '@/pages/AuthPage'
 import DashboardPage from '@/pages/DashboardPage'
 import MarketplacePage from '@/pages/MarketplacePage'
@@ -18,7 +19,7 @@ import ProjectDescriptionPage from '@/pages/ProjectDescriptionPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem("token")
-  if (!token) return <Navigate to="/" replace />
+  if (!token) return <Navigate to="/auth" replace />
   return <>{children}</>
 }
 
@@ -32,8 +33,9 @@ export default function App() {
     >
       <BrowserRouter>
         <Routes>
-          {/* Public Route */}
-          <Route path="/" element={<AuthPage />} />
+          {/* Public Routes */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/auth" element={<AuthPage />} />
 
           <Route path="/dashboard" element={<ProtectedRoute><AppShell><DashboardPage /></AppShell></ProtectedRoute>} />
           <Route path="/marketplace" element={<ProtectedRoute><AppShell><MarketplacePage /></AppShell></ProtectedRoute>} />

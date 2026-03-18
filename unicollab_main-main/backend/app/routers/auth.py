@@ -8,7 +8,7 @@ from app.core import security
 from app.core.config import settings
 from app.models import models
 from app.schemas import schemas
-from supabase import create_client
+# from supabase import create_client
 import uuid as uuid_lib
 
 router = APIRouter()
@@ -70,57 +70,6 @@ def sync_supabase_profile(
     current_user: models.User = Depends(deps.get_current_user),
 ) -> Any:
     """
-    Ensures the current user has a matching profile in Supabase.
-    Returns the Supabase profile id.
+    DUMMY sync for development without supabase package.
     """
-    supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
-    
-    # Check if profile already exists by email
-    res = supabase.table('profiles').select('id').ilike('email', current_user.email).maybe_single().execute()
-    
-    data = None
-    if hasattr(res, 'data'):
-        data = res.data
-    elif isinstance(res, dict):
-        data = res.get('data', res)
-        
-    if data:
-        profile_id = data.get('id') if isinstance(data, dict) else data[0].get('id') if (isinstance(data, list) and len(data) > 0) else None
-        if profile_id:
-            return {"supabase_profile_id": profile_id, "created": False}
-    
-    # Profile doesn't exist — create it with the user's existing SQLite UUID
-    profile_id = str(current_user.id)
-    profile = current_user.profile
-    full_name = profile.full_name if profile else current_user.email.split('@')[0]
-    
-    try:
-        # First ensure the user exists in Supabase 'users' table to satisfy FK
-        try:
-            supabase.table('users').upsert({
-                'id': profile_id,
-                'email': current_user.email,
-                'role': current_user.role,
-                'password_hash': 'DUMMY'
-            }).execute()
-        except Exception as e:
-            print("Failed to upsert user in supabase:", e)
-            
-        insert_res = supabase.table('profiles').insert({
-            'id': profile_id,
-            'email': current_user.email,
-            'full_name': full_name,
-        }).execute()
-        return {"supabase_profile_id": profile_id, "created": True}
-    except Exception as e:
-        # FK constraint — try with a fresh UUID that won't conflict
-        new_id = str(uuid_lib.uuid4())
-        try:
-            supabase.table('profiles').insert({
-                'id': new_id,
-                'email': current_user.email,
-                'full_name': full_name,
-            }).execute()
-            return {"supabase_profile_id": new_id, "created": True}
-        except Exception as e2:
-            raise HTTPException(status_code=500, detail=f"Could not sync profile to Supabase: {str(e2)}")
+    return {"supabase_profile_id": str(current_user.id), "created": False}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { getProjectById, ProjectData, checkJoinRequestStatus, getCurrentSupabaseProfileId } from '@/lib/project-service'
+import { ProjectData } from '@/lib/project-service'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -8,9 +8,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
 import { JoinRequestModal } from '@/components/JoinRequestModal'
 import { SimilarProjectsCarousel } from '@/components/SimilarProjectsCarousel'
-import { Users, Eye, Bookmark, Share2, Calendar, Clock, MapPin, Code, MessageCircle } from 'lucide-react'
+import { Users, Eye, Bookmark, Share2, Calendar, Clock, MapPin, Code, MessageCircle, Crown, ShieldCheck, Settings, Edit, Check, X as XIcon, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
+import api from '@/lib/api'
 
 export default function ProjectDescriptionPage() {
     const { projectId } = useParams<{ projectId: string }>()
@@ -18,28 +19,51 @@ export default function ProjectDescriptionPage() {
     const [loading, setLoading] = useState(true)
     const [currentUser, setCurrentUser] = useState<any>(null)
     const [joinStatus, setJoinStatus] = useState<string | null>(null)
+    
+    // Owner specific state
+    const [requests, setRequests] = useState<any[]>([])
+    const [loadingRequests, setLoadingRequests] = useState(false)
+    const [isEditing, setIsEditing] = useState(false)
+    const [editData, setEditData] = useState<any>(null)
+    const [saving, setSaving] = useState(false)
 
     useEffect(() => {
         async function fetchProject() {
             if (!projectId) return
             setLoading(true)
             try {
-                const userId = await getCurrentSupabaseProfileId()
-                setCurrentUser(userId ? { id: userId } : null)
+                // Fetch current user from backend profile
+                try {
+                    const { data: userData } = await api.get('/users/profile')
+                    setCurrentUser(userData)
+                } catch (err) {
+                    console.warn("User not logged in or profile fetch failed", err)
+                    setCurrentUser(null)
+                }
 
-                const data = await getProjectById(projectId)
+                // Fetch project from backend API
+                const { data } = await api.get(`/projects/${projectId}`)
                 if (data) {
                     setProject(data)
-                    if (userId) {
-                        const status = await checkJoinRequestStatus(projectId, userId)
-                        setJoinStatus(status)
+                    
+                    // Check join request status from backend
+                    try {
+                        const { data: sentRequests } = await api.get('/requests/sent')
+                        const myRequest = sentRequests.find((r: any) => r.project_id === projectId)
+                        if (myRequest) {
+                            setJoinStatus(myRequest.status)
+                        }
+                    } catch (err) {
+                        console.error("Failed to check join status", err)
                     }
-                } else {
-                    toast.error("Project not found.")
                 }
-            } catch (err) {
+            } catch (err: any) {
                 console.error(err)
-                toast.error("Failed to load project details.")
+                if (err.response?.status === 404) {
+                    setProject(null)
+                } else {
+                    toast.error("Failed to load project details.")
+                }
             } finally {
                 setLoading(false)
             }
@@ -47,12 +71,82 @@ export default function ProjectDescriptionPage() {
         fetchProject()
     }, [projectId])
 
+    useEffect(() => {
+        async function fetchRequests() {
+            if (project && project.founder_id === currentUser?.id) {
+                setLoadingRequests(true)
+                try {
+                    const { data } = await api.get(`/requests/received?project_id=${projectId}`)
+                    setRequests(data.filter((r: any) => r.status === 'pending') || [])
+                } catch (err) {
+                    console.error("Failed to fetch requests", err)
+                } finally {
+                    setLoadingRequests(false)
+                }
+            }
+        }
+        fetchRequests()
+    }, [project, currentUser, projectId])
+
+    const handleToggleRequests = async () => {
+        if (!project) return
+        try {
+            const newStatus = !project.requests_enabled
+            await api.put(`/projects/${project.id}`, { requests_enabled: newStatus })
+            setProject({ ...project, requests_enabled: newStatus })
+            toast.success(newStatus ? "Requests opened" : "Requests closed")
+        } catch (err) {
+            toast.error("Failed to update status")
+        }
+    }
+
+    const handleRequestAction = async (requestId: string, action: 'accept' | 'reject') => {
+        try {
+            await api.post(`/requests/${requestId}/${action}`)
+            setRequests(prev => prev.filter(r => r.id !== requestId))
+            toast.success(`Request ${action}ed`)
+            
+            if (action === 'accept') {
+                const { data } = await api.get(`/projects/${projectId}`)
+                if (data) setProject(data)
+            }
+        } catch (err) {
+            toast.error(`Failed to ${action} request`)
+        }
+    }
+
     const handleShare = async () => {
         try {
             await navigator.clipboard.writeText(window.location.href)
             toast.success("Link copied to clipboard!")
         } catch {
             toast.error("Failed to copy link.")
+        }
+    }
+
+    const startEditing = () => {
+        setEditData({
+            domains: project?.domains || [],
+            required_skills: project?.required_skills || [],
+            eligible_years: project?.eligible_years || [],
+            eligible_branches: project?.eligible_branches || [],
+            team_size_required: project?.team_size_required || 3
+        })
+        setIsEditing(true)
+    }
+
+    const saveEdits = async () => {
+        if (!project) return
+        setSaving(true)
+        try {
+            await api.put(`/projects/${project.id}`, editData)
+            setProject({ ...project, ...editData })
+            setIsEditing(false)
+            toast.success("Project updated!")
+        } catch (err) {
+            toast.error("Failed to update project")
+        } finally {
+            setSaving(false)
         }
     }
 
@@ -109,7 +203,27 @@ export default function ProjectDescriptionPage() {
                     <div className="rounded-3xl bg-card p-6 md:p-8 flex flex-col md:flex-row gap-8 border border-border/50 shadow-sm relative overflow-hidden">
                         <div className="flex-1 z-10">
                             <div className="flex items-center gap-3 mb-4">
-                                <span className="text-sm font-medium text-blue-400">{project.domain}</span>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {isEditing ? (
+                                        <div className="flex flex-wrap gap-2">
+                                            {/* Minimal domain editing for now - keeping it simple since it's a large page */}
+                                            {editData.domains.map((d: string) => (
+                                                <Badge key={d} variant="outline" className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                                    {d}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {project.domains ? project.domains.map(d => (
+                                                <span key={d} className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">{d}</span>
+                                            )) : <span className="text-sm font-medium text-blue-400">{project.domain}</span>}
+                                        </>
+                                    )}
+                                    {!project.requests_enabled && (
+                                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/20 uppercase tracking-tighter">Requests Closed</span>
+                                    )}
+                                </div>
                                 <Badge className={
                                     project.status === "IN_PROGRESS"
                                         ? "border-0 bg-accent/20 text-accent font-semibold px-3 py-1"
@@ -130,7 +244,32 @@ export default function ProjectDescriptionPage() {
                             </p>
 
                             <div className="flex flex-wrap items-center gap-4 mb-8">
-                                {!isCreator && (
+                                {isCreator ? (
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <Button 
+                                            onClick={isEditing ? saveEdits : startEditing} 
+                                            disabled={saving}
+                                            className="bg-accent text-accent-foreground rounded-full px-6 flex items-center gap-2"
+                                        >
+                                            {isEditing ? (
+                                              <><Check className="size-4" /> Save Changes</>
+                                            ) : (
+                                              <><Edit className="size-4" /> Edit Project</>
+                                            )}
+                                        </Button>
+                                        <Button 
+                                            variant="outline" 
+                                            onClick={handleToggleRequests}
+                                            className={`rounded-full px-6 flex items-center gap-2 border-border/60 ${project.requests_enabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}
+                                        >
+                                            {project.requests_enabled ? (
+                                              <><ShieldCheck className="size-4" /> Accepting Requests</>
+                                            ) : (
+                                              <><XIcon className="size-4" /> Requests Closed</>
+                                            )}
+                                        </Button>
+                                    </div>
+                                ) : (
                                     isMember ? (
                                         <Button disabled className="bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/10 border border-emerald-500/20 rounded-full px-6 flex items-center gap-2 cursor-default">
                                             Joined ✓
@@ -171,6 +310,58 @@ export default function ProjectDescriptionPage() {
                         <div className="absolute top-0 right-0 -m-32 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none"></div>
                     </div>
 
+                    {/* OWNER ONLY: Requested Members Section */}
+                    {isCreator && (
+                        <div className="rounded-2xl bg-card border border-accent/30 p-6 shadow-sm">
+                            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                                <span className="text-accent text-xl"><UserPlus /></span> Requested Members
+                                {requests.length > 0 && <Badge className="bg-accent text-accent-foreground ml-2">{requests.length}</Badge>}
+                            </h2>
+                            
+                            {loadingRequests ? (
+                                <div className="text-center py-4 text-muted-foreground">Loading requests...</div>
+                            ) : requests.length === 0 ? (
+                                <div className="text-center py-8 border border-dashed border-border/50 rounded-xl bg-secondary/10">
+                                    <p className="text-sm text-muted-foreground">No pending join requests at the moment.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {requests.map((request) => (
+                                        <div key={request.id} className="flex flex-col md:flex-row items-start md:items-center justify-between p-4 rounded-xl bg-secondary/20 border border-border/50 gap-4">
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-10 w-10">
+                                                    <AvatarImage src={request.sender?.avatar_url || ''} />
+                                                    <AvatarFallback>{request.sender?.full_name?.charAt(0) || '?'}</AvatarFallback>
+                                                </Avatar>
+                                                <div>
+                                                    <div className="font-semibold text-sm">{request.sender?.full_name}</div>
+                                                    <div className="text-xs text-muted-foreground line-clamp-1">{request.message}</div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 w-full md:w-auto">
+                                                <Button 
+                                                    size="sm" 
+                                                    onClick={() => handleRequestAction(request.id, 'accept')}
+                                                    className="flex-1 md:flex-none bg-emerald-500 hover:bg-emerald-600 text-white h-8 px-4"
+                                                >
+                                                    Accept
+                                                </Button>
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="outline" 
+                                                    onClick={() => handleRequestAction(request.id, 'reject')}
+                                                    className="flex-1 md:flex-none border-red-500/50 text-red-500 hover:bg-red-500/10 h-8 px-4"
+                                                >
+                                                    Reject
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* 2. About This Project */}
                     <div className="rounded-2xl bg-card border border-border/50 p-6 shadow-sm">
                         <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
@@ -188,21 +379,45 @@ export default function ProjectDescriptionPage() {
                     </div>
 
                     {/* 3. Tech Stack / Skills */}
-                    {project.required_skills && project.required_skills.length > 0 && (
+                    {(project.required_skills && project.required_skills.length > 0 || isCreator) && (
                         <div className="rounded-2xl bg-card border border-border/50 p-6 shadow-sm">
-                            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                                <span className="text-primary text-xl">💼</span> Tech Stack
-                            </h2>
-                            <div className="flex flex-wrap gap-2">
-                                {project.required_skills.map((skill, index) => (
-                                    <span
-                                        key={index}
-                                        className="rounded-full bg-secondary/50 border border-border/50 px-4 py-2 text-sm text-foreground hover:bg-secondary transition-colors cursor-default"
-                                    >
-                                        {skill}
-                                    </span>
-                                ))}
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                                    <span className="text-primary text-xl">💼</span> Tech Stack
+                                </h2>
+                                {isCreator && !isEditing && (
+                                    <Button variant="ghost" size="icon" onClick={() => startEditing()} className="h-6 w-6 text-muted-foreground hover:text-accent">
+                                        <Edit className="size-3" />
+                                    </Button>
+                                )}
                             </div>
+                            
+                            {isEditing ? (
+                                <div className="space-y-4">
+                                    <p className="text-xs text-muted-foreground italic mb-2">Note: Multi-select skill editing coming soon. For now, you can view existing skills.</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {editData.required_skills.map((skill: string, index: number) => (
+                                            <span
+                                                key={index}
+                                                className="rounded-full bg-primary/20 border border-primary/30 px-4 py-2 text-sm text-primary"
+                                            >
+                                                {skill}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex flex-wrap gap-2">
+                                    {project.required_skills.map((skill, index) => (
+                                        <span
+                                            key={index}
+                                            className="rounded-full bg-secondary/50 border border-border/50 px-4 py-2 text-sm text-foreground hover:bg-secondary transition-colors cursor-default"
+                                        >
+                                            {skill}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -221,7 +436,8 @@ export default function ProjectDescriptionPage() {
                                         </AvatarFallback>
                                     </Avatar>
                                     <span className="font-semibold text-foreground text-center text-sm">{team.member?.full_name}</span>
-                                    <span className="text-xs text-primary mt-1 font-medium">
+                                    <span className="text-xs text-primary mt-1 font-medium flex items-center gap-1">
+                                        {team.role_in_team === 'Creator' && <Crown className="size-3 text-yellow-500" />}
                                         {team.role_in_team || 'Member'}
                                     </span>
                                 </div>
@@ -250,7 +466,7 @@ export default function ProjectDescriptionPage() {
                                 <Button variant="outline" size="icon" className="h-8 w-8 rounded-full bg-card border-border/50"><span className="text-sm">→</span></Button>
                             </div>
                         </div>
-                        <SimilarProjectsCarousel domain={project.domain} currentProjectId={project.id} />
+                        <SimilarProjectsCarousel domain={project.domains?.[0] || ''} currentProjectId={project.id} />
                     </div>
 
                 </div>
@@ -275,13 +491,16 @@ export default function ProjectDescriptionPage() {
                             </div>
 
                             <CardContent className="pt-12 text-center pb-6">
-                                <h3 className="font-bold text-lg text-foreground">{project.founder?.full_name}</h3>
+                                <h3 className="font-bold text-lg text-foreground flex items-center justify-center gap-2">
+                                    {project.founder?.full_name}
+                                    <Crown className="size-4 text-yellow-500" />
+                                </h3>
                                 <p className="text-sm text-muted-foreground mt-1 mb-4 flex items-center justify-center gap-1.5">
                                     <Clock className="size-3.5" />
-                                    {project.founder?.domain} • {project.founder?.year}
+                                    {project.founder?.domain} • {project.founder?.year_of_study}
                                 </p>
                                 <p className="text-xs text-card-foreground/70 mb-6 leading-relaxed">
-                                    {project.founder?.bio || 'Passionate about building impactful projects.'}
+                                    {project.founder?.interests || 'Passionate about building impactful projects.'}
                                 </p>
 
                                 <div className="flex flex-col gap-3">
@@ -295,6 +514,74 @@ export default function ProjectDescriptionPage() {
                             </CardContent>
                         </Card>
 
+                        {/* Eligibility Criteria Sidebar Card */}
+                        {(project.eligible_years?.length > 0 || project.eligible_branches?.length > 0 || isCreator) && (
+                            <Card className="bg-card border-accent/20 shadow-sm rounded-2xl border-2">
+                                <CardHeader className="pb-4 flex flex-row items-center justify-between">
+                                    <h3 className="text-xs font-bold tracking-wider text-accent uppercase flex items-center gap-2">
+                                        <ShieldCheck className="size-4" /> Eligibility Requirements
+                                    </h3>
+                                    {isCreator && !isEditing && (
+                                        <Button variant="ghost" size="icon" onClick={() => startEditing()} className="h-6 w-6 text-muted-foreground hover:text-accent">
+                                            <Edit className="size-3" />
+                                        </Button>
+                                    )}
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    {isEditing ? (
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <div className="text-[10px] font-bold text-muted-foreground uppercase">Target Years</div>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {["1st Year", "2nd Year", "3rd Year", "4th Year", "PG"].map(year => (
+                                                        <Badge 
+                                                            key={year} 
+                                                            onClick={() => {
+                                                                const years = editData.eligible_years.includes(year)
+                                                                    ? editData.eligible_years.filter((y: string) => y !== year)
+                                                                    : [...editData.eligible_years, year]
+                                                                setEditData({...editData, eligible_years: years})
+                                                            }}
+                                                            variant={editData.eligible_years.includes(year) ? "default" : "secondary"}
+                                                            className="cursor-pointer text-[10px]"
+                                                        >
+                                                            {year}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {project.eligible_years?.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <div className="text-xs font-medium text-muted-foreground uppercase">Target Years</div>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {project.eligible_years.map(year => (
+                                                            <Badge key={year} variant="secondary" className="bg-secondary/50 text-[10px]">{year}</Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {project.eligible_branches?.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <div className="text-xs font-medium text-muted-foreground uppercase">Target Branches</div>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {project.eligible_branches.map(branch => (
+                                                            <Badge key={branch} variant="outline" className="border-emerald-500/30 text-emerald-500 text-[10px]">{branch}</Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                    <p className="text-[10px] text-muted-foreground italic pt-2">
+                                        * Only eligible candidates can apply for this project.
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        )}
+
                         {/* Project Details Sidebar Card */}
                         <Card className="bg-card border-border/50 shadow-sm rounded-2xl">
                             <CardHeader className="pb-4">
@@ -307,7 +594,7 @@ export default function ProjectDescriptionPage() {
                                 </div>
                                 <div className="flex justify-between items-center text-sm">
                                     <div className="flex items-center gap-2 text-muted-foreground"><MapPin className="size-4" /> Domain</div>
-                                    <span className="font-medium text-foreground">{project.domain}</span>
+                                    <span className="font-medium text-foreground">{project.domains?.join(', ')}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-sm pt-2">
                                     <div className="flex items-center gap-2 text-muted-foreground">Status</div>

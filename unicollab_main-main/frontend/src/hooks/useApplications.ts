@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { getCurrentSupabaseProfileId } from '@/lib/project-service';
+import api from '@/lib/api';
 
 export interface Application {
     id: string;
@@ -23,20 +22,10 @@ export const useApplications = () => {
     const fetchMyApplications = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
-                .from('collaboration_requests')
-                .select(`
-          *,
-          project:project_id (
-            title
-          )
-        `)
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
+            const { data } = await api.get('/requests/sent');
             setApplications(data || []);
         } catch (err: any) {
-            setError(err.message);
+            setError(err.response?.data?.detail || err.message);
         } finally {
             setLoading(false);
         }
@@ -44,48 +33,23 @@ export const useApplications = () => {
 
     const applyToProject = async (projectId: string, message?: string) => {
         try {
-            const userId = await getCurrentSupabaseProfileId();
-            if (!userId) throw new Error("Not authenticated");
-
-            const { data, error } = await supabase
-                .from('collaboration_requests')
-                .insert([{ project_id: projectId, sender_id: userId, message }])
-                .select()
-                .single();
-
-            if (error) throw error;
+            const { data } = await api.post('/requests/send', {
+                project_id: projectId,
+                message: message
+            });
             setApplications(prev => [data, ...prev]);
             return data;
         } catch (err: any) {
-            setError(err.message);
-            throw err;
+            const msg = err.response?.data?.detail || err.message;
+            setError(msg);
+            throw new Error(msg);
         }
     };
 
     useEffect(() => {
         fetchMyApplications();
-
-        // Realtime subscription for status updates
-        const subscription = supabase
-            .channel('my_applications_status')
-            .on(
-                'postgres_changes',
-                {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'collaboration_requests',
-                },
-                (payload: { new: Record<string, any> }) => {
-                    setApplications(prev =>
-                        prev.map(app => app.id === payload.new.id ? { ...app, ...payload.new as Application } : app)
-                    );
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(subscription);
-        };
+        // Since we are moving away from Supabase for this, real-time updates via Supabase channel are disabled.
+        // In a full implementation, we could use WebSockets or polling if needed.
     }, []);
 
     return {

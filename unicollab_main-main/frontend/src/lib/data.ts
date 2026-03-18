@@ -223,6 +223,8 @@ export const recentActivity = [
 
 export const domains = ["Tech", "Law", "Business", "Arts", "Medical"]
 
+export const availableYears = ["1st Year", "2nd Year", "3rd Year", "4th Year", "PG"]
+
 export const allSkills = [
   "React",
   "Node.js",

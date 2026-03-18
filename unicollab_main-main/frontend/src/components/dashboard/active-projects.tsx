@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Users } from "lucide-react"
 import api from "@/lib/api"
+import { Link } from "react-router-dom"
 
 interface Project {
   id: number
@@ -64,8 +65,9 @@ export function ActiveProjects() {
             const currentMembers = project.teams ? project.teams.length : 0
 
             return (
-              <div
+              <Link
                 key={project.id}
+                to={`/projects/${project.id}`}
                 className="group rounded-2xl bg-card p-5 transition-transform hover:-translate-y-0.5"
               >
                 <div className="flex items-start justify-between">
@@ -110,7 +112,7 @@ export function ActiveProjects() {
                     {currentMembers}/{project.team_size_required} members
                   </span>
                 </div>
-              </div>
+              </Link>
             )
           })}
         </div>

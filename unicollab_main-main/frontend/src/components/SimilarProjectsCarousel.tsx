@@ -55,7 +55,7 @@ export function SimilarProjectsCarousel({ domain, currentProjectId }: { domain: 
                             >
                                 {project.status.toUpperCase()}
                             </Badge>
-                            <span className="text-xs text-card-foreground/50">{project.domain}</span>
+                            <span className="text-xs text-card-foreground/50">{project.domains?.[0] || 'Project'}</span>
                         </div>
                         <h3 className="mt-3 font-semibold text-card-foreground text-balance">
                             {project.title}

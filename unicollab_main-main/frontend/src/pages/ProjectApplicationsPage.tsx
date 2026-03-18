@@ -68,6 +68,8 @@ const ProjectApplicationsPage: React.FC = () => {
                             application={{
                                 id: app.id,
                                 applicant_name: app.sender?.full_name || 'Anonymous Student',
+                                applicant_domain: app.sender?.domain,
+                                applicant_year: app.sender?.year_of_study,
                                 status: app.status,
                                 message: app.message,
                                 created_at: app.created_at

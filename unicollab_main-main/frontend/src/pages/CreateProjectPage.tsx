@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { domains, allSkills } from "@/lib/data"
+import { domains, allSkills, availableYears } from "@/lib/data"
 import { ArrowLeft, X, Plus } from "lucide-react"
 import { Link } from "react-router-dom"
 import api from "@/lib/api"
@@ -12,12 +12,17 @@ export default function CreateProjectPage() {
   const navigate = useNavigate()
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [domain, setDomain] = useState("")
+  const [domainList, setDomainList] = useState<string[]>([])
+  const [eligibleYears, setEligibleYears] = useState<string[]>([])
+  const [eligibleBranches, setEligibleBranches] = useState<string[]>([])
+  const [branchInput, setBranchInput] = useState("")
   const [teamSize, setTeamSize] = useState("3")
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
   const [skillInput, setSkillInput] = useState("")
   const [showSkillDropdown, setShowSkillDropdown] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [requestsEnabled, setRequestsEnabled] = useState(true)
+
 
   const filteredSkills = allSkills.filter(
     (s) =>
@@ -36,8 +41,8 @@ export default function CreateProjectPage() {
   }
 
   const handleSubmit = async () => {
-    if (!title || !description || !domain || selectedSkills.length === 0) {
-      toast.error("Please fill in all fields")
+    if (!title || !description || domainList.length === 0 || selectedSkills.length === 0) {
+      toast.error("Please fill in all mandatory fields")
       return
     }
 
@@ -48,8 +53,11 @@ export default function CreateProjectPage() {
       await api.post('/projects/create', {
         title,
         description,
-        domain,
+        domains: domainList,
         required_skills: selectedSkills,
+        eligible_years: eligibleYears,
+        eligible_branches: eligibleBranches,
+        requests_enabled: requestsEnabled,
         team_size_required: parseInt(teamSize)
       })
 
@@ -57,7 +65,8 @@ export default function CreateProjectPage() {
       navigate("/marketplace")
     } catch (error: any) {
       console.error(error)
-      toast.error(error.message || "Failed to create project")
+      const errorDetail = error.response?.data?.detail
+      toast.error(errorDetail || error.message || "Failed to create project")
     } finally {
       setLoading(false)
     }
@@ -158,15 +167,29 @@ export default function CreateProjectPage() {
           </div>
         </div>
 
-        {/* Domain */}
+        {/* Domains */}
         <div className="space-y-2">
-          <label className="text-sm font-medium text-card-foreground">Domain</label>
+          <label className="text-sm font-medium text-card-foreground">Domains (Select multiple)</label>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {domainList.map(d => (
+              <span key={d} className="inline-flex items-center gap-1 rounded-lg bg-blue-500/20 px-2 py-1 text-xs text-blue-400">
+                {d}
+                <button onClick={() => setDomainList(domainList.filter(item => item !== d))} className="hover:text-blue-200">
+                  <X className="size-3" />
+                </button>
+              </span>
+            ))}
+          </div>
           <select
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
+            value=""
+            onChange={(e) => {
+              if (e.target.value && !domainList.includes(e.target.value)) {
+                setDomainList([...domainList, e.target.value])
+              }
+            }}
             className="h-10 w-full rounded-xl border border-border bg-secondary px-4 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
           >
-            <option value="">Select a domain</option>
+            <option value="">Add a domain...</option>
             {domains.map((d) => (
               <option key={d} value={d}>
                 {d}
@@ -175,17 +198,85 @@ export default function CreateProjectPage() {
           </select>
         </div>
 
-        {/* Team Size */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-card-foreground">Team Size</label>
-          <input
-            type="number"
-            min={2}
-            max={10}
-            value={teamSize}
-            onChange={(e) => setTeamSize(e.target.value)}
-            className="h-10 w-full rounded-xl border border-border bg-secondary px-4 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          />
+        {/* Eligibility Criteria Section */}
+        <div className="pt-4 border-t border-border/50 space-y-5">
+           <h3 className="text-sm font-bold text-primary uppercase tracking-wider">Eligibility Constraints</h3>
+           
+           {/* Eligible Years */}
+           <div className="space-y-2">
+              <label className="text-sm font-medium text-card-foreground">Eligible Years</label>
+              <div className="flex flex-wrap gap-3">
+                 {availableYears.map(year => (
+                    <label key={year} className="flex items-center gap-2 cursor-pointer group">
+                       <input 
+                          type="checkbox" 
+                          checked={eligibleYears.includes(year)}
+                          onChange={(e) => {
+                             if (e.target.checked) setEligibleYears([...eligibleYears, year])
+                             else setEligibleYears(eligibleYears.filter(y => y !== year))
+                          }}
+                          className="size-4 rounded border-border bg-secondary text-accent focus:ring-offset-0 focus:ring-accent"
+                       />
+                       <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">{year}</span>
+                    </label>
+                 ))}
+              </div>
+           </div>
+
+           {/* Eligible Branches */}
+           <div className="space-y-2">
+              <label className="text-sm font-medium text-card-foreground">Eligible Branches (Leave empty for all)</label>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {eligibleBranches.map((branch) => (
+                  <span
+                    key={branch}
+                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/20 px-2.5 py-1 text-xs text-emerald-400"
+                  >
+                    {branch}
+                    <button onClick={() => setEligibleBranches(eligibleBranches.filter(b => b !== branch))} className="hover:text-emerald-200">
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={branchInput}
+                  onChange={(e) => setBranchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && branchInput.trim()) {
+                      e.preventDefault()
+                      if (!eligibleBranches.includes(branchInput.trim())) {
+                        setEligibleBranches([...eligibleBranches, branchInput.trim()])
+                      }
+                      setBranchInput("")
+                    }
+                  }}
+                  placeholder="e.g. CSE, ECE (Press Enter to add)"
+                  className="h-10 flex-1 rounded-xl border border-border bg-secondary px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+           </div>
+        </div>
+
+        {/* Team Size & Requests Toggle */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-card-foreground">Team Size</label>
+            <input
+              type="number"
+              min={2}
+              max={10}
+              value={teamSize}
+              onChange={(e) => setTeamSize(e.target.value)}
+              className="h-10 w-full rounded-xl border border-border bg-secondary px-4 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+
+          <div className="space-y-4 flex flex-col justify-end pb-1">
+             {/* Accept New Requests Toggle removed as per user request. Enabled by default. */}
+          </div>
         </div>
 
         {/* Submit */}
